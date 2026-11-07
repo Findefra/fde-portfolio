@@ -32,25 +32,95 @@ They want a single assistant that:
 │   ├─ 04-evaluation.md
 │   ├─ 05-runbook.md
 │   └─ 06-handoff.md
-├─ src/                 # Application code (FastAPI, ingestion, retrieval)
-├─ terraform/           # Infrastructure
+├─ src/                 # FastAPI app, ingestion, retrieval, mock LLM
+├─ data/corpus/         # Sample documents (public / internal / restricted)
+├─ terraform/           # Infrastructure (to be added)
 └─ evals/               # Evaluation questions and results
 ```
 
 ## Current Progress
 
 - [x] Repository and documentation skeleton created
-- [ ] Discovery and scope documents finalized
-- [ ] Document corpus prepared and tagged
-- [ ] Ingestion + vector store pipeline
-- [ ] Permission-aware retrieval + citations
+- [x] FastAPI + ingestion + retrieval skeleton (in-memory, mock LLM)
+- [x] Sample corpus with public / internal / restricted documents
+- [ ] Discovery and scope documents refined as needed
+- [ ] Real embeddings + vector store (pgvector / Bedrock)
 - [ ] Evaluation set and baseline metrics
 - [ ] AWS deployment via Terraform
 - [ ] Runbook and handoff complete
 
-## How to Run (once implemented)
+## How to Run the Skeleton
 
-Instructions will be added here after the core service is working.
+### 1. Setup
+
+```bash
+cd projects/01-ops-knowledge-assistant/src
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env        # optional
+```
+
+### 2. Ingest the sample corpus
+
+```bash
+python ingest.py --corpus ../data/corpus
+```
+
+You should see the three sample documents being loaded with their sensitivity labels.
+
+### 3. Start the API
+
+```bash
+uvicorn main:app --reload --port 8000
+```
+
+Open http://localhost:8000/docs for the interactive Swagger UI.
+
+### 4. Example requests
+
+**Health**
+```bash
+curl http://localhost:8000/health
+```
+
+**Ask as SRE (can see restricted)**
+```bash
+curl -X POST http://localhost:8000/api/v1/ask \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: dev-key-sre" \
+  -d '{"question": "What is the production break-glass procedure?", "role": "sre"}'
+```
+
+**Ask as Viewer (should refuse restricted content)**
+```bash
+curl -X POST http://localhost:8000/api/v1/ask \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: dev-key-viewer" \
+  -d '{"question": "What is the production break-glass procedure?", "role": "viewer"}'
+```
+
+**Demo API keys**
+| Key | Role |
+|-----|------|
+| `dev-key-admin` | admin |
+| `dev-key-sre` | sre |
+| `dev-key-viewer` | viewer |
+
+## Design Notes (Skeleton)
+
+- Permission filtering happens **before** retrieval (see `retrieval.py`).
+- LLM layer is currently a deterministic mock (`llm.py`) so you can run without API keys.
+- Vector store is in-memory with simple keyword scoring. Replace with real embeddings + pgvector/Bedrock next.
+- Auth is a simple API-key → role map. Designed so it can later map to real IdP group claims.
+
+## Next Implementation Steps
+
+1. Wire real embeddings and a persistent vector store.
+2. Improve chunking and add metadata quality checks.
+3. Build the evaluation question set and run baseline metrics.
+4. Add Terraform for a minimal AWS deployment.
+5. Flesh out the runbook with real operational steps.
 
 ---
 
