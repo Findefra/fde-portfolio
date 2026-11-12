@@ -16,12 +16,14 @@ def generate_answer(
     sources: List[Source],
     *,
     refuse_if_no_sources: bool = True,
+    min_best_score: float = 0.25,
 ) -> Tuple[Optional[str], bool, Optional[str]]:
     """Return (answer, refused, refusal_reason).
 
     Mock behaviour:
     - If no sources → refuse
-    - Otherwise → produce a grounded-looking answer that cites the sources
+    - If best source score is below min_best_score → refuse (weak match)
+    - Otherwise → produce a grounded answer that cites the sources
     """
     if not sources and refuse_if_no_sources:
         return (
@@ -37,14 +39,22 @@ def generate_answer(
             "No sources retrieved.",
         )
 
-    # Very simple grounded response for the skeleton.
+    best = max((s.score or 0.0) for s in sources)
+    if best < min_best_score:
+        return (
+            None,
+            True,
+            "Retrieved sources are too weakly related to answer confidently.",
+        )
+
     citations = []
     for i, s in enumerate(sources[:3], start=1):
         title = s.title or s.document_id
-        citations.append(f"[{i}] {title}")
+        sens = f" ({s.sensitivity})" if s.sensitivity else ""
+        citations.append(f"[{i}] {title}{sens}")
 
     answer_parts = [
-        f"Based on the available operational documentation, here is a concise answer to: \"{question}\".",
+        f'Based on the available operational documentation, here is a concise answer to: "{question}".',
         "",
         "Key points drawn from the retrieved sources:",
     ]

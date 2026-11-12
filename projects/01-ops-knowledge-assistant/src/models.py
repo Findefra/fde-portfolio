@@ -19,7 +19,13 @@ class Role(str, Enum):
 
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=3, max_length=2000)
-    role: Role = Field(..., description="Caller's role used for permission filtering")
+    role: Optional[Role] = Field(
+        None,
+        description=(
+            "Optional client-declared role for documentation only. "
+            "The server always uses the role bound to the API key."
+        ),
+    )
     top_k: Optional[int] = Field(None, ge=1, le=20)
 
 
@@ -29,6 +35,10 @@ class Source(BaseModel):
     chunk_id: Optional[str] = None
     score: Optional[float] = None
     excerpt: Optional[str] = None
+    sensitivity: Optional[str] = Field(
+        None,
+        description="Document sensitivity label (public | internal | restricted)",
+    )
 
 
 class AskResponse(BaseModel):
@@ -43,6 +53,7 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     environment: str
     app_name: str
+    chunks_loaded: int = 0
 
 
 class IngestDocument(BaseModel):
@@ -51,7 +62,7 @@ class IngestDocument(BaseModel):
     document_id: str
     title: str
     content: str
-    sensitivity: str = "internal"  # e.g. public | internal | restricted
+    sensitivity: str = "internal"
     team: str = "platform"
     version: str = "1.0"
-    environment: str = "all"  # e.g. prod | nonprod | all
+    environment: str = "all"
