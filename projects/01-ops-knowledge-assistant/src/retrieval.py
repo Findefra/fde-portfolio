@@ -1,7 +1,7 @@
 """Retrieval and permission filtering layer.
 
-This is intentionally simple for the skeleton.
-Replace the in-memory / mock implementations with real pgvector + embeddings later.
+Permission filtering happens *before* ranking so restricted content never
+enters the candidate set for unauthorized roles.
 """
 
 from __future__ import annotations
@@ -22,14 +22,9 @@ class Chunk:
     team: str
     version: str
     environment: str
-    embedding: Optional[List[float]] = None  # placeholder
+    embedding: Optional[List[float]] = None
 
 
-# ---------------------------------------------------------------------------
-# Permission model
-# ---------------------------------------------------------------------------
-
-# Which roles may see which sensitivity levels.
 ROLE_SENSITIVITY_MAP = {
     Role.ADMIN: {"public", "internal", "restricted"},
     Role.SRE: {"public", "internal", "restricted"},
@@ -41,15 +36,10 @@ def allowed_sensitivities(role: Role) -> set[str]:
     return ROLE_SENSITIVITY_MAP.get(role, {"public"})
 
 
-# ---------------------------------------------------------------------------
-# In-memory store for the skeleton (replace with real vector DB)
-# ---------------------------------------------------------------------------
-
 _CHUNKS: List[Chunk] = []
 
 
 def reset_store() -> None:
-    """Clear the in-memory store (useful for tests / re-ingestion)."""
     global _CHUNKS
     _CHUNKS = []
 
@@ -63,13 +53,9 @@ def get_all_chunks() -> List[Chunk]:
     return list(_CHUNKS)
 
 
-# ---------------------------------------------------------------------------
-# Retrieval
-# ---------------------------------------------------------------------------
-
 def simple_keyword_score(query: str, text: str) -> float:
-    """Very naive scoring for the skeleton so the API is usable without embeddings."""
-    q_terms = set(query.lower().split())
+    """Naive keyword overlap for the skeleton (no external embedding API)."""
+    q_terms = {t for t in query.lower().split() if len(t) > 2}
     t_terms = set(text.lower().split())
     if not q_terms:
         return 0.0
@@ -85,8 +71,8 @@ def retrieve(
 ) -> List[Source]:
     """Return permission-filtered sources for the question.
 
-    Important: we filter by sensitivity *before* ranking.
-    This is the safety property we care about for the portfolio.
+    Safety property: filter by sensitivity *before* ranking.
+    Restricted chunks are never scored for viewer roles.
     """
     allowed = allowed_sensitivities(role)
     candidates = [c for c in _CHUNKS if c.sensitivity in allowed]
@@ -109,6 +95,7 @@ def retrieve(
                 chunk_id=chunk.chunk_id,
                 score=round(score, 4),
                 excerpt=chunk.content[:300] + ("..." if len(chunk.content) > 300 else ""),
+                sensitivity=chunk.sensitivity,
             )
         )
     return sources
